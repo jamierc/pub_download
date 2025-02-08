@@ -1,0 +1,56 @@
+name: Monitor Third-Party EPUB Folder
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"  # every 15 minutes
+  workflow_dispatch:  # allows manual triggering
+
+jobs:
+  check-epub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: true  # needed for pushing state changes
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install Python dependencies
+        run: |
+          pip install requests
+
+      - name: Run monitor script
+        env:
+          # Third-party repository configuration
+          THIRD_REPO_OWNER: ${{ secrets.THIRD_REPO_OWNER }}
+          THIRD_REPO_NAME: ${{ secrets.THIRD_REPO_NAME }}
+          THIRD_REPO_FOLDER: ${{ secrets.THIRD_REPO_FOLDER }}
+          FILE_EXTENSION: ".epub"
+          # GitHub token for API (if needed)
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          # Email configuration
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+        run: |
+          python monitor_epub.py
+
+      - name: Commit updated state file
+        run: |
+          # Configure git user
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          # Check if there are changes in processed_files.txt
+          if [ -n "$(git status --porcelain processed_files.txt)" ]; then
+            git add processed_files.txt
+            git commit -m "Update processed_files.txt after processing new EPUB files"
+            git push
+          else
+            echo "No changes to commit."
+          fi
